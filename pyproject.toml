@@ -79,7 +79,7 @@ all = [
 dev = [
   "pytest>=9.0.0",
   "black>=26.3.0",
-  "flake8>=7.3.0",
+  "flake8>=7.0.0",
   "mypy>=1.19.0",
   "pre-commit>=4.5.0",
 ]

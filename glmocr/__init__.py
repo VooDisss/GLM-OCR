@@ -1,4 +1,4 @@
-"""GLM-OCR Python SDK.  """
+"""GLM-OCR Python SDK."""
 
 from __future__ import annotations
 

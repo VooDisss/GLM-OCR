@@ -147,8 +147,7 @@ class GlmOcr:
         stream: Literal[False] = ...,
         save_layout_visualization: bool = ...,
         **kwargs: Any,
-    ) -> PipelineResult:
-        ...
+    ) -> PipelineResult: ...
 
     @overload
     def parse(
@@ -158,8 +157,7 @@ class GlmOcr:
         stream: Literal[False] = ...,
         save_layout_visualization: bool = ...,
         **kwargs: Any,
-    ) -> List[PipelineResult]:
-        ...
+    ) -> List[PipelineResult]: ...
 
     @overload
     def parse(
@@ -169,8 +167,7 @@ class GlmOcr:
         stream: Literal[True],
         save_layout_visualization: bool = ...,
         **kwargs: Any,
-    ) -> Generator[PipelineResult, None, None]:
-        ...
+    ) -> Generator[PipelineResult, None, None]: ...
 
     def parse(
         self,
@@ -560,8 +557,7 @@ def parse(
     images: str,
     config_path: Optional[str] = ...,
     save_layout_visualization: bool = ...,
-) -> PipelineResult:
-    ...
+) -> PipelineResult: ...
 
 
 @overload
@@ -569,8 +565,7 @@ def parse(
     images: List[str],
     config_path: Optional[str] = ...,
     save_layout_visualization: bool = ...,
-) -> List[PipelineResult]:
-    ...
+) -> List[PipelineResult]: ...
 
 
 @overload
@@ -581,8 +576,7 @@ def parse(
     *,
     stream: Literal[True],
     **kwargs: Any,
-) -> Generator[PipelineResult, None, None]:
-    ...
+) -> Generator[PipelineResult, None, None]: ...
 
 
 def parse(

@@ -16,7 +16,6 @@ import base64
 import pytest
 import requests
 
-
 # ---------------------------------------------------------------------------
 # All integration tests are marked with @pytest.mark.integration
 # conftest.py will auto-skip unless GLMOCR_RUN_INTEGRATION=1

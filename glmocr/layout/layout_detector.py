@@ -1,5 +1,4 @@
-"""PP-DocLayoutV3 layout detector.
-"""
+"""PP-DocLayoutV3 layout detector."""
 
 from __future__ import annotations
 

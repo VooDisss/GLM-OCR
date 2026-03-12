@@ -4,7 +4,6 @@ from .base import BaseLayoutDetector
 
 from typing import Optional
 
-
 _layout_import_error: Optional[BaseException] = None
 _layout_import_error_is_dependency: bool = False
 

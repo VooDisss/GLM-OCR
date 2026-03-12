@@ -1,4 +1,4 @@
-"""Configuration models and loaders.  """
+"""Configuration models and loaders."""
 
 from __future__ import annotations
 

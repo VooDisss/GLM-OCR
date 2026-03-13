@@ -48,6 +48,8 @@ _ENV_MAP: Dict[str, str] = {
     "ENABLE_LAYOUT": "pipeline.enable_layout",
     # Allow overriding which GPU(s) the layout model uses
     "LAYOUT_CUDA_VISIBLE_DEVICES": "pipeline.layout.cuda_visible_devices",
+    # Explicit device for layout model: "cpu", "cuda", "cuda:0", etc.
+    "LAYOUT_DEVICE": "pipeline.layout.device",
     # Logging
     "LOG_LEVEL": "logging.level",
 }
@@ -185,6 +187,13 @@ class LayoutConfig(_BaseConfig):
     batch_size: int = 8
     workers: int = 1
     cuda_visible_devices: str = "0"
+    # Explicit device placement for the layout model.
+    # - null (default): auto-select using cuda_visible_devices if CUDA is
+    #   available, otherwise CPU.  This preserves backward compatibility.
+    # - "cpu": force CPU even when CUDA is available.
+    # - "cuda": use the default CUDA device.
+    # - "cuda:N": use a specific CUDA device (overrides cuda_visible_devices).
+    device: Optional[str] = None
     img_size: Optional[int] = None
     layout_nms: bool = True
     layout_unclip_ratio: Optional[Any] = None
@@ -382,6 +391,7 @@ class GlmOcrConfig(_BaseConfig):
             "ocr_api_port": "pipeline.ocr_api.api_port",
             # Layout GPU binding
             "cuda_visible_devices": "pipeline.layout.cuda_visible_devices",
+            "layout_device": "pipeline.layout.device",
         }
         for kw, dotted in _KW_MAP.items():
             if kw in overrides and overrides[kw] is not None:

@@ -77,6 +77,7 @@ class GlmOcr:
         ocr_api_host: Optional[str] = None,
         ocr_api_port: Optional[int] = None,
         cuda_visible_devices: Optional[str] = None,
+        layout_device: Optional[str] = None,
     ):
         """Initialize GlmOcr.
 
@@ -95,6 +96,9 @@ class GlmOcr:
             enable_layout: Whether to run layout detection.
             log_level: Logging level (DEBUG, INFO, WARNING, ERROR).
             env_file: Path to a ``.env`` file to load API key and other settings from.
+            layout_device: Device for the layout model: ``"cpu"``, ``"cuda"``,
+                or ``"cuda:N"``.  Defaults to auto-detection via
+                ``cuda_visible_devices``.
         """
         # If an API key is available (constructor arg or env var), default to MaaS.
         # This ensures `GlmOcr()` with GLMOCR_API_KEY in env auto-selects MaaS
@@ -117,6 +121,7 @@ class GlmOcr:
             ocr_api_host=ocr_api_host,
             ocr_api_port=ocr_api_port,
             cuda_visible_devices=cuda_visible_devices,
+            layout_device=layout_device,
         )
         # Apply logging config for API/SDK usage.
         ensure_logging_configured(

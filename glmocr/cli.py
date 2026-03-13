@@ -155,6 +155,16 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Log level (default: INFO)",
     )
+    parse_parser.add_argument(
+        "--layout-device",
+        type=str,
+        default=None,
+        help=(
+            'Device for the layout detection model: "cpu", "cuda", or '
+            '"cuda:N".  Default: auto-detect (CUDA if available, else CPU).  '
+            "Use --layout-device cpu to keep the GPU free for the OCR model."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -179,6 +189,7 @@ def main():
             api_key=args.api_key,
             mode=args.mode,
             env_file=args.env_file,
+            layout_device=args.layout_device,
         ) as glm_parser:
             logger.info(
                 "Using Pipeline (enable_layout=%s)...",

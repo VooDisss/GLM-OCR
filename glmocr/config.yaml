@@ -203,6 +203,14 @@ pipeline:
     batch_size: 1
     workers: 1
     cuda_visible_devices: "0"
+    # Explicit device placement for the layout model.
+    # - null (default): auto-select (CUDA if available via cuda_visible_devices,
+    #   otherwise CPU).
+    # - "cpu": force CPU even when a GPU is available. Useful for single-GPU
+    #   setups where the GPU is reserved for the OCR model.
+    # - "cuda" or "cuda:N": use a specific GPU (overrides cuda_visible_devices).
+    # Can also be set via GLMOCR_LAYOUT_DEVICE env var or --layout-device CLI flag.
+    # device: null
     # img_size: null                # resize input (optional)
 
     # Post-processing

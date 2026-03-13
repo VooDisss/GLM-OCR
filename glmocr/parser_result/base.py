@@ -6,6 +6,7 @@ Defines common fields and JSON/Markdown save logic.
 from __future__ import annotations
 
 import json
+import re
 import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -63,7 +64,8 @@ class BaseParserResult(ABC):
         output_dir = Path(output_dir).absolute()
         if self.original_images:
             image_path = Path(self.original_images[0])
-            output_path = output_dir / image_path.stem
+            base_name = self._sanitize_name(image_path.stem)
+            output_path = output_dir / base_name
         else:
             output_path = output_dir / "result"
 
@@ -126,6 +128,18 @@ class BaseParserResult(ABC):
             if val is not None:
                 d[attr.lstrip("_")] = val
         return d
+
+    @staticmethod
+    def _sanitize_name(value: str) -> str:
+        """Sanitize a string for use as a directory/file name.
+
+        Strips characters that are illegal on Windows (<>:"/\\|?*) and
+        control characters (0x00-0x1F).  Also removes trailing spaces
+        and dots which Windows silently drops, causing path mismatches.
+        """
+        value = re.sub(r"[<>:\"/\\|?*\x00-\x1F]", "_", value)
+        value = value.rstrip(" .")
+        return value or "result"
 
     def to_json(self, **kwargs: Any) -> str:
         """Serialise the result to a JSON string.

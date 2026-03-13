@@ -67,7 +67,7 @@ class PipelineResult(BaseParserResult):
             return
 
         if self.original_images:
-            stem = Path(self.original_images[0]).stem
+            stem = self._sanitize_name(Path(self.original_images[0]).stem)
             target_dir = Path(output_dir).absolute() / stem / "layout_vis"
         else:
             target_dir = Path(output_dir).absolute() / "result" / "layout_vis"
@@ -86,7 +86,11 @@ class PipelineResult(BaseParserResult):
             layout_files = sorted(temp_layout_path.glob("layout_page*.jpg"))
             layout_files.extend(sorted(temp_layout_path.glob("layout_page*.png")))
 
-        stem = Path(self.original_images[0]).stem if self.original_images else "result"
+        stem = (
+            self._sanitize_name(Path(self.original_images[0]).stem)
+            if self.original_images
+            else "result"
+        )
         for layout_file in layout_files:
             m = re.match(
                 r"layout_page(\d+)\.(jpg|png)$",

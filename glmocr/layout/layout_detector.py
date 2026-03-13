@@ -71,12 +71,8 @@ class PPDocLayoutDetector(BaseLayoutDetector):
         #   2. Auto: cuda:{cuda_visible_devices} if CUDA available, else CPU
         if self._config_device is not None:
             self._device = self._config_device
-        elif torch.cuda.is_available():
-            self._device = (
-                f"cuda:{self.cuda_visible_devices}"
-                if self.cuda_visible_devices is not None
-                else "cuda"
-            )
+        elif torch.cuda.is_available() and self.cuda_visible_devices:
+            self._device = f"cuda:{self.cuda_visible_devices}"
         else:
             self._device = "cpu"
         self._model = self._model.to(self._device)

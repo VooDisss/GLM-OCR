@@ -168,8 +168,8 @@ def _draw_polygon_masks(
     draw = ImageDraw.Draw(overlay)
 
     for i, box_info in enumerate(boxes):
-        polygon_points = box_info.get("polygon_points") or []
-        if len(polygon_points) < 3:
+        polygon_points = box_info.get("polygon_points")
+        if polygon_points is None or len(polygon_points) < 3:
             continue
 
         # Use the same color as label text
@@ -296,7 +296,7 @@ def draw_layout_boxes(
             draw.line(rectangle, width=draw_thickness, fill=color)
 
         # Determine text anchor position
-        if has_polygon and len(polygon_points) >= 3:
+        if has_polygon and polygon_points is not None and len(polygon_points) >= 3:
             # Find left-top and right-top points of polygon
             image_left_top = (0, 0)
             image_right_top = (img_width, 0)

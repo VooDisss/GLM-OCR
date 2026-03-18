@@ -191,6 +191,12 @@ glmocr parse examples/source/code.png --config my_config.yaml
 
 # Enable debug logging with profiling
 glmocr parse examples/source/code.png --log-level DEBUG
+
+# Run layout detection on CPU (keep GPU free for OCR model)
+glmocr parse examples/source/code.png --layout-device cpu
+
+# Run layout detection on a specific GPU
+glmocr parse examples/source/code.png --layout-device cuda:1
 ```
 
 #### Python API
@@ -211,6 +217,14 @@ with GlmOcr() as parser:
     result = parser.parse("image.png")
     print(result.json_result)
     result.save()
+
+# Place layout model on CPU (useful when GPU is reserved for OCR)
+with GlmOcr(layout_device="cpu") as parser:
+    result = parser.parse("image.png")
+
+# Place layout model on a specific GPU
+with GlmOcr(layout_device="cuda:1") as parser:
+    result = parser.parse("image.png")
 ```
 
 #### Flask Service
@@ -279,6 +293,10 @@ pipeline:
 
   # Layout detection (optional)
   enable_layout: false
+
+  # Layout model device placement
+  layout:
+    # device: null   # null=auto, "cpu", "cuda", or "cuda:N"
 ```
 
 See [config.yaml](glmocr/config.yaml) for all options.

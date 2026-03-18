@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Union, List
 
 import yaml
 from dotenv import dotenv_values
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Environment variable prefix for all GLM-OCR settings.
 ENV_PREFIX = "GLMOCR_"
@@ -199,6 +199,34 @@ class LayoutConfig(_BaseConfig):
     layout_unclip_ratio: Optional[Any] = None
     layout_merge_bboxes_mode: Union[str, Dict[int, str]] = "large"
     label_task_mapping: Optional[Dict[str, Any]] = None
+
+    @field_validator("device")
+    @classmethod
+    def _validate_device(cls, value: Optional[str]) -> Optional[str]:
+        """Validate the layout device string.
+
+        Allowed values:
+        - None / null (auto-select based on CUDA availability)
+        - "cpu"
+        - "cuda"
+        - "cuda:<int>" (e.g., "cuda:0", "cuda:1")
+        """
+        if value is None:
+            return value
+        v = value.strip()
+        if v == "":
+            # Treat empty string as "unset" for convenience.
+            return None
+        if v == "cpu" or v == "cuda":
+            return v
+        if v.startswith("cuda:"):
+            index_part = v[5:]
+            if index_part.isdigit():
+                return v
+        raise ValueError(
+            "Invalid layout device value. Expected one of: None, 'cpu', 'cuda', "
+            "or 'cuda:<int>' (e.g., 'cuda:0')."
+        )
 
 
 class PipelineConfig(_BaseConfig):

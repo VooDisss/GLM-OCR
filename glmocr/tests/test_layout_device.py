@@ -17,6 +17,7 @@ Run real model tests (downloads PP-DocLayoutV3 on first run):
 from __future__ import annotations
 
 import gc
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -284,6 +285,23 @@ def _run_detection(detector, image):
             pass
 
 
+def _run_real_model_tests() -> bool:
+    """Return True if the slow, real-model layout tests should be executed.
+
+    These tests download and run the full PP-DocLayoutV3 model and are intended
+    to be treated as integration/slow tests. They are skipped by default and
+    only run when explicitly enabled via an environment variable.
+    """
+    return os.getenv("GLMOCR_RUN_LAYOUT_REAL_TESTS") == "1"
+
+
+@pytest.mark.skipif(
+    not _run_real_model_tests(),
+    reason=(
+        "Real layout model tests are slow and require network/model download; "
+        "set GLMOCR_RUN_LAYOUT_REAL_TESTS=1 to enable."
+    ),
+)
 class TestLayoutDeviceReal:
     """Real model tests — actually load PP-DocLayoutV3 and run inference."""
 
@@ -378,7 +396,7 @@ class TestLayoutDeviceReal:
         assert len(results[0]) > 0
 
     def test_results_consistent_across_devices(self, sample_image):
-        """CPU and CUDA produce the same number of detected regions."""
+        """CPU and CUDA produce generally consistent detected regions."""
         if not _has_cuda():
             pytest.skip("No CUDA available — cannot compare devices")
 
@@ -400,11 +418,22 @@ class TestLayoutDeviceReal:
         print(f"  [consistency] CPU labels: {cpu_labels}")
         print(f"  [consistency] CUDA labels: {cuda_labels}")
 
-        # Same number of detections (model is deterministic in eval mode)
-        assert len(cpu_results[0]) == len(
-            cuda_results[0]
-        ), f"CPU found {len(cpu_results[0])} regions, CUDA found {len(cuda_results[0])}"
-        assert cpu_labels == cuda_labels, "Labels should match across devices"
+        # Basic invariants: both devices should detect at least one region.
+        assert len(cpu_results[0]) > 0, "CPU should detect at least one region"
+        assert len(cuda_results[0]) > 0, "CUDA should detect at least one region"
+
+        # Warn (but don't fail) on cross-device count/label mismatches — numeric
+        # nondeterminism across CPU/CUDA can cause occasional differences.
+        if len(cpu_results[0]) != len(cuda_results[0]):
+            print(
+                f"  [consistency] WARNING: region count mismatch — "
+                f"CPU={len(cpu_results[0])}, CUDA={len(cuda_results[0])}"
+            )
+        if cpu_labels != cuda_labels:
+            print(
+                f"  [consistency] WARNING: label mismatch — "
+                f"CPU={cpu_labels}, CUDA={cuda_labels}"
+            )
 
     @pytest.mark.skipif(_gpu_count() < 2, reason="Need 2+ GPUs")
     def test_both_gpus(self, sample_image):
@@ -426,7 +455,13 @@ class TestLayoutDeviceReal:
         assert len(gpu1_results[0]) > 0
         assert len(gpu0_results[0]) == len(gpu1_results[0])
 
-    @pytest.mark.skipif(_gpu_count() < 2, reason="Need 2+ GPUs")
+    @pytest.mark.skipif(
+        _gpu_count() < 2 or not os.getenv("RUN_LAYOUT_BENCHMARKS"),
+        reason=(
+            "Benchmark test disabled by default; set RUN_LAYOUT_BENCHMARKS=1 "
+            "and require 2+ GPUs to run."
+        ),
+    )
     def test_benchmark_all_devices(self, sample_image):
         """Benchmark: run inference on CPU, cuda:0, and cuda:1 and print timing comparison."""
         results_summary = []

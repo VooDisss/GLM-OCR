@@ -5,6 +5,7 @@ Provides a command-line interface to run document parsing.
 
 import sys
 import json
+import re
 import argparse
 import traceback
 from pathlib import Path
@@ -15,6 +16,23 @@ from glmocr.maas_client import MissingApiKeyError
 from glmocr.utils.logging import get_logger, configure_logging
 
 logger = get_logger(__name__)
+
+
+def layout_device_type(value: str) -> str:
+    """Validate --layout-device argument.
+
+    Accepts:
+      - "cpu"
+      - "cuda"
+      - "cuda:N" where N is a non-negative integer.
+    """
+    if value in ("cpu", "cuda"):
+        return value
+    if re.fullmatch(r"cuda:\d+", value):
+        return value
+    raise argparse.ArgumentTypeError(
+        'Invalid layout device {!r}. Expected "cpu", "cuda", or "cuda:N".'.format(value)
+    )
 
 
 def load_image_paths(input_path: str) -> List[str]:
@@ -157,7 +175,7 @@ def main():
     )
     parse_parser.add_argument(
         "--layout-device",
-        type=str,
+        type=layout_device_type,
         default=None,
         help=(
             'Device for the layout detection model: "cpu", "cuda", or '

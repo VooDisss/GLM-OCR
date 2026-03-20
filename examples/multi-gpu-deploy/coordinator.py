@@ -411,6 +411,8 @@ class Coordinator:
                 worker_cmd.extend(["--input-root", input_root])
             if self.args.config:
                 worker_cmd.extend(["--config", self.args.config])
+            if getattr(self.args, "no_save", False):
+                worker_cmd.append("--no-save")
 
             worker_log = self.log_dir / f"worker_gpu{gpu_id}.log"
             wfh = open(worker_log, "w")

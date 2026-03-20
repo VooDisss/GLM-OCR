@@ -114,6 +114,11 @@ Examples:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Log level for workers (default: WARNING)",
     )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not write any result files (useful for benchmarking / stress tests)",
+    )
 
     return parser.parse_args()
 

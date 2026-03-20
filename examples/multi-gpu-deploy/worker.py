@@ -46,30 +46,33 @@ def run_worker(args) -> None:
         with GlmOcr(**glm_kwargs) as parser:
             write_progress(args.progress_file, 0, total, 0, "running")
 
+            no_save = getattr(args, "no_save", False)
+
             for result in parser.parse(files, stream=True):
                 completed += 1
 
-                try:
-                    save_dir = args.output
-                    if args.input_root and result.original_images:
-                        try:
-                            rel = Path(
-                                result.original_images[0]
-                            ).parent.relative_to(args.input_root)
-                            if str(rel) != ".":
-                                save_dir = str(Path(args.output) / rel)
-                        except ValueError:
-                            pass
+                if not no_save:
+                    try:
+                        save_dir = args.output
+                        if args.input_root and result.original_images:
+                            try:
+                                rel = Path(
+                                    result.original_images[0]
+                                ).parent.relative_to(args.input_root)
+                                if str(rel) != ".":
+                                    save_dir = str(Path(args.output) / rel)
+                            except ValueError:
+                                pass
 
-                    result.save(output_dir=save_dir)
-                except Exception as e:
-                    failed += 1
-                    src = (
-                        result.original_images[0]
-                        if result.original_images
-                        else "unknown"
-                    )
-                    failed_files.append({"file": src, "error": str(e)})
+                        result.save(output_dir=save_dir)
+                    except Exception as e:
+                        failed += 1
+                        src = (
+                            result.original_images[0]
+                            if result.original_images
+                            else "unknown"
+                        )
+                        failed_files.append({"file": src, "error": str(e)})
 
                 write_progress(
                     args.progress_file, completed, total, failed, "running"
@@ -88,7 +91,8 @@ def run_worker(args) -> None:
 
     status = "done" if failed == 0 else "done_with_errors"
     write_progress(args.progress_file, completed, total, failed, status)
-    _save_failed_list(args.progress_file, failed_files)
+    if not getattr(args, "no_save", False):
+        _save_failed_list(args.progress_file, failed_files)
 
 
 def _save_failed_list(

@@ -182,7 +182,9 @@ class ResultFormatter(BasePostProcessor):
 
                 for item in sorted_results:
                     result = deepcopy(item)
-                    result["layout_index"] = result.get("layout_index", result.get("index", 0))
+                    result["layout_index"] = result.get(
+                        "layout_index", result.get("index", 0)
+                    )
                     result["layout_score"] = float(
                         result.get("layout_score", result.get("score") or 0.0)
                     )

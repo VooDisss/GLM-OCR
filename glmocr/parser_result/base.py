@@ -98,15 +98,23 @@ class BaseParserResult(ABC):
                 except json.JSONDecodeError:
                     pass
 
-            has_printed_page_data = bool(self.page_metadata) or bool(
-                self.page_number_candidates
-            ) or self.document_page_numbering is not None
+            has_printed_page_data = (
+                bool(self.page_metadata)
+                or bool(self.page_number_candidates)
+                or self.document_page_numbering is not None
+            )
 
             if has_printed_page_data:
                 json_data = {
                     "json_result": json_data,
-                    "page_metadata": self.page_metadata if self.page_metadata is not None else [],
-                    "page_number_candidates": self.page_number_candidates if self.page_number_candidates is not None else [],
+                    "page_metadata": (
+                        self.page_metadata if self.page_metadata is not None else []
+                    ),
+                    "page_number_candidates": (
+                        self.page_number_candidates
+                        if self.page_number_candidates is not None
+                        else []
+                    ),
                     "document_page_numbering": self.document_page_numbering,
                 }
 

@@ -150,7 +150,7 @@ class TestLayoutDeviceUnit:
                 return_value=MagicMock(),
             ),
             patch(
-                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
+                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessor.from_pretrained",
                 return_value=mock_proc,
             ),
             patch.object(det, "_prepare_pp_doclayout_state_dict", return_value={}),
@@ -174,7 +174,7 @@ class TestLayoutDeviceUnit:
                 return_value=MagicMock(),
             ),
             patch(
-                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
+                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessor.from_pretrained",
                 return_value=mock_proc,
             ),
             patch.object(det, "_prepare_pp_doclayout_state_dict", return_value={}),
@@ -200,7 +200,7 @@ class TestLayoutDeviceUnit:
                 return_value=MagicMock(),
             ),
             patch(
-                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
+                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessor.from_pretrained",
                 return_value=mock_proc,
             ),
             patch.object(torch.cuda, "is_available", return_value=False),
@@ -238,7 +238,7 @@ class TestLayoutDeviceUnit:
                 return_value=MagicMock(),
             ),
             patch(
-                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
+                "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessor.from_pretrained",
                 return_value=mock_proc,
             ),
             patch.object(torch.cuda, "is_available", return_value=True),

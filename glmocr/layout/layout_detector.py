@@ -14,7 +14,7 @@ from safetensors.torch import load_file
 from transformers import (
     PPDocLayoutV3Config,
     PPDocLayoutV3ForObjectDetection,
-    PPDocLayoutV3ImageProcessorFast,
+    PPDocLayoutV3ImageProcessor,
 )
 
 from glmocr.layout.base import BaseLayoutDetector
@@ -101,7 +101,7 @@ class PPDocLayoutDetector(BaseLayoutDetector):
         """Load model and processor once in the main process."""
         logger.debug("Initializing PP-DocLayoutV3...")
 
-        self._image_processor = PPDocLayoutV3ImageProcessorFast.from_pretrained(
+        self._image_processor = PPDocLayoutV3ImageProcessor.from_pretrained(
             self.model_dir
         )
         self._model = PPDocLayoutV3ForObjectDetection.from_pretrained(

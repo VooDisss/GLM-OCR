@@ -146,9 +146,14 @@ class TestLayoutDeviceUnit:
                 return_value=mock_model,
             ),
             patch(
+                "glmocr.layout.layout_detector.PPDocLayoutV3Config.from_pretrained",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
                 return_value=mock_proc,
             ),
+            patch.object(det, "_prepare_pp_doclayout_state_dict", return_value={}),
         ):
             det.start()
 
@@ -165,9 +170,14 @@ class TestLayoutDeviceUnit:
                 return_value=mock_model,
             ),
             patch(
+                "glmocr.layout.layout_detector.PPDocLayoutV3Config.from_pretrained",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
                 return_value=mock_proc,
             ),
+            patch.object(det, "_prepare_pp_doclayout_state_dict", return_value={}),
         ):
             det.start()
 
@@ -186,10 +196,15 @@ class TestLayoutDeviceUnit:
                 return_value=mock_model,
             ),
             patch(
+                "glmocr.layout.layout_detector.PPDocLayoutV3Config.from_pretrained",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
                 return_value=mock_proc,
             ),
             patch.object(torch.cuda, "is_available", return_value=False),
+            patch.object(det, "_prepare_pp_doclayout_state_dict", return_value={}),
         ):
             det.start()
 
@@ -219,14 +234,63 @@ class TestLayoutDeviceUnit:
                 return_value=mock_model,
             ),
             patch(
+                "glmocr.layout.layout_detector.PPDocLayoutV3Config.from_pretrained",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "glmocr.layout.layout_detector.PPDocLayoutV3ImageProcessorFast.from_pretrained",
                 return_value=mock_proc,
             ),
             patch.object(torch.cuda, "is_available", return_value=True),
+            patch.object(det, "_prepare_pp_doclayout_state_dict", return_value={}),
         ):
             det.start()
 
         assert det._device == "cuda:1"
+
+    def test_detector_prepares_pp_doclayout_decoder_head_aliases(self):
+        """State dict preparation aliases tied encoder head weights for load."""
+        torch = self._require_layout_runtime()
+
+        det, _, _ = self._mock_detector("cpu")
+        state_dict = {
+            "model.enc_score_head.weight": torch.full((3, 4), 1.25),
+            "model.enc_score_head.bias": torch.full((3,), 2.5),
+            "model.enc_bbox_head.layers.0.weight": torch.full((4, 4), 1.0),
+            "model.enc_bbox_head.layers.0.bias": torch.full((4,), 11.0),
+            "model.enc_bbox_head.layers.1.weight": torch.full((4, 4), 2.0),
+            "model.enc_bbox_head.layers.1.bias": torch.full((4,), 12.0),
+            "model.enc_bbox_head.layers.2.weight": torch.full((4, 4), 3.0),
+            "model.enc_bbox_head.layers.2.bias": torch.full((4,), 13.0),
+        }
+
+        with patch.object(
+            det,
+            "_resolve_model_weights_path",
+            return_value=Path("dummy-model.safetensors"),
+        ), patch(
+            "glmocr.layout.layout_detector.load_file",
+            return_value=state_dict.copy(),
+        ):
+            prepared = det._prepare_pp_doclayout_state_dict()
+
+        assert torch.equal(
+            prepared["model.decoder.class_embed.weight"],
+            state_dict["model.enc_score_head.weight"],
+        )
+        assert torch.equal(
+            prepared["model.decoder.class_embed.bias"],
+            state_dict["model.enc_score_head.bias"],
+        )
+        for idx in range(3):
+            assert torch.equal(
+                prepared[f"model.decoder.bbox_embed.layers.{idx}.weight"],
+                state_dict[f"model.enc_bbox_head.layers.{idx}.weight"],
+            )
+            assert torch.equal(
+                prepared[f"model.decoder.bbox_embed.layers.{idx}.bias"],
+                state_dict[f"model.enc_bbox_head.layers.{idx}.bias"],
+            )
 
 
 class TestPageLoader:

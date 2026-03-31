@@ -227,6 +227,11 @@ with GlmOcr(detect_printed_page_numbers=True) as parser:
     result = parser.parse("document.pdf")
     print(result.to_dict().get("page_metadata", []))
 
+# Export image assets with rendered and embedded outputs
+with GlmOcr(enable_image_asset_export=True) as parser:
+    result = parser.parse("document.pdf")
+    result.save()
+
 # Place layout model on CPU (useful when GPU is reserved for OCR)
 with GlmOcr(layout_device="cpu") as parser:
     result = parser.parse("image.png")
@@ -308,6 +313,11 @@ pipeline:
   result_formatter:
     output_format: both # json, markdown, or both
     detect_printed_page_numbers: false
+    enable_image_asset_export: false
+    markdown_image_preference: embedded # embedded | rendered
+    image_match_iou_threshold: 0.5
+    image_match_containment_threshold: 0.8
+    rendered_image_dpi: 300
 
   # Layout model device placement
   layout:
@@ -331,6 +341,23 @@ $env:GLMOCR_DETECT_PRINTED_PAGE_NUMBERS = 'true'
 pipeline:
   result_formatter:
     detect_printed_page_numbers: true
+```
+
+Image asset export can also be enabled from Python or YAML:
+
+```python
+with GlmOcr(enable_image_asset_export=True) as parser:
+    result = parser.parse("document.pdf")
+```
+
+```yaml
+pipeline:
+  result_formatter:
+    enable_image_asset_export: true
+    markdown_image_preference: embedded
+    image_match_iou_threshold: 0.5
+    image_match_containment_threshold: 0.8
+    rendered_image_dpi: 300
 ```
 
 ### Output Formats
@@ -379,6 +406,24 @@ saved `paper.json` is wrapped as a top-level object and includes:
   ]
 }
 ```
+
+When image asset export is enabled, image-like blocks can additionally expose:
+
+```json
+{
+  "label": "image",
+  "image_path": "imgs_embedded/embedded_page2_idx2_xref199.jpeg",
+  "rendered_image_path": "imgs_rendered/cropped_page2_idx0.jpg",
+  "embedded_image_path": "imgs_embedded/embedded_page2_idx2_xref199.jpeg",
+  "image_asset_source": "embedded"
+}
+```
+
+Behavior summary:
+- rendered image assets are written to `imgs_rendered/`
+- if `enable_image_asset_export=true`, matched embedded PDF images are also written to `imgs_embedded/`
+- `image_path` follows `markdown_image_preference`
+- `embedded_image_path` is `null` when no embedded match exists
 
 - Markdown
 

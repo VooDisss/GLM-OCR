@@ -219,6 +219,11 @@ with GlmOcr() as parser:
 with GlmOcr(detect_printed_page_numbers=True) as parser:
     result = parser.parse("document.pdf")
     print(result.to_dict().get("page_metadata", []))
+
+# 导出渲染图像与嵌入式 PDF 图像资产
+with GlmOcr(enable_image_asset_export=True) as parser:
+    result = parser.parse("document.pdf")
+    result.save()
 ```
 
 #### Flask 服务
@@ -293,6 +298,11 @@ pipeline:
   result_formatter:
     output_format: both # json, markdown, or both
     detect_printed_page_numbers: false
+    enable_image_asset_export: false
+    markdown_image_preference: embedded # embedded | rendered
+    image_match_iou_threshold: 0.5
+    image_match_containment_threshold: 0.8
+    rendered_image_dpi: 300
 ```
 
 更多选项请参考 [config.yaml](glmocr/config.yaml)。
@@ -312,6 +322,23 @@ $env:GLMOCR_DETECT_PRINTED_PAGE_NUMBERS = 'true'
 pipeline:
   result_formatter:
     detect_printed_page_numbers: true
+```
+
+图像资产导出也可以通过 Python 或 YAML 启用：
+
+```python
+with GlmOcr(enable_image_asset_export=True) as parser:
+    result = parser.parse("document.pdf")
+```
+
+```yaml
+pipeline:
+  result_formatter:
+    enable_image_asset_export: true
+    markdown_image_preference: embedded
+    image_match_iou_threshold: 0.5
+    image_match_containment_threshold: 0.8
+    rendered_image_dpi: 300
 ```
 
 ### 输出格式
@@ -359,6 +386,24 @@ pipeline:
   ]
 }
 ```
+
+启用图像资产导出后，图像类区域还会额外暴露：
+
+```json
+{
+  "label": "image",
+  "image_path": "imgs_embedded/embedded_page2_idx2_xref199.jpeg",
+  "rendered_image_path": "imgs_rendered/cropped_page2_idx0.jpg",
+  "embedded_image_path": "imgs_embedded/embedded_page2_idx2_xref199.jpeg",
+  "image_asset_source": "embedded"
+}
+```
+
+行为说明：
+- 渲染图像资产写入 `imgs_rendered/`
+- 当 `enable_image_asset_export=true` 时，匹配成功的嵌入式 PDF 图像还会写入 `imgs_embedded/`
+- `image_path` 会根据 `markdown_image_preference` 选择最终引用的资产
+- 若没有嵌入式匹配，`embedded_image_path` 为 `null`
 
 - Markdown
 

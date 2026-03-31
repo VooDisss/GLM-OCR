@@ -15,6 +15,7 @@ Extension points:
 
 from __future__ import annotations
 
+import json
 import time
 import threading
 from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional
@@ -23,6 +24,7 @@ from glmocr.dataloader import PageLoader
 from glmocr.ocr_client import OCRClient
 from glmocr.parser_result import PipelineResult
 from glmocr.postprocess import ResultFormatter
+from glmocr.utils.image_asset_utils import export_image_assets
 from glmocr.utils.logging import get_logger
 
 from glmocr.pipeline._common import (
@@ -362,6 +364,19 @@ class Pipeline:
                 grouped,
                 cropped_images=cropped_images or None,
             )
+            parsed_json = json.loads(json_u)
+            parsed_json, md_u, image_files = export_image_assets(
+                parsed_json,
+                md_u,
+                original_inputs[u],
+                enable_image_asset_export=self.config.result_formatter.enable_image_asset_export,
+                markdown_image_preference=self.config.result_formatter.markdown_image_preference,
+                image_match_iou_threshold=self.config.result_formatter.image_match_iou_threshold,
+                image_match_containment_threshold=self.config.result_formatter.image_match_containment_threshold,
+                rendered_image_dpi=self.config.result_formatter.rendered_image_dpi,
+                rendered_images=image_files or None,
+            )
+            json_u = json.dumps(parsed_json, ensure_ascii=False, indent=2)
             page_metadata = self.result_formatter.page_metadata
             page_number_candidates = self.result_formatter.page_number_candidates
             document_page_numbering = self.result_formatter.document_page_numbering

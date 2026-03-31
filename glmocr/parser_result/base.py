@@ -40,8 +40,8 @@ class BaseParserResult(ABC):
             json_result: JSON result (string, dict, or list).
             markdown_result: Markdown result (optional).
             original_images: Original image paths.
-            image_files: Mapping of ``filename`` → PIL Image for image-type
-                regions, to be saved under ``imgs/`` during :meth:`save`.
+            image_files: Mapping of relative output path → image asset payload
+                for image-type regions, to be saved during :meth:`save`.
             raw_json_result: Raw model output before post-processing;
                 saved as ``{name}_model.json`` alongside the final result.
             page_metadata: Derived per-page printed page metadata.
@@ -144,13 +144,16 @@ class BaseParserResult(ABC):
 
         # Image files produced by the result formatter
         if self.image_files:
-            imgs_dir = output_path / "imgs"
-            imgs_dir.mkdir(parents=True, exist_ok=True)
-            for filename, img in self.image_files.items():
+            for rel_path, img in self.image_files.items():
                 try:
-                    img.save(imgs_dir / filename, quality=95)
+                    target = output_path / rel_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if isinstance(img, (bytes, bytearray)):
+                        target.write_bytes(bytes(img))
+                    else:
+                        img.save(target, quality=95)
                 except Exception as e:
-                    logger.warning("Failed to save image %s: %s", filename, e)
+                    logger.warning("Failed to save image %s: %s", rel_path, e)
             self.image_files = None
 
     def to_dict(self) -> dict:

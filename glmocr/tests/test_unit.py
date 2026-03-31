@@ -33,6 +33,17 @@ class TestConfig:
         text_labels = cfg.pipeline.layout.label_task_mapping["text"]
         assert "number" in text_labels
 
+    def test_image_asset_export_defaults(self):
+        """Image asset export defaults remain conservative and opt-in."""
+        from glmocr.config import ResultFormatterConfig
+
+        cfg = ResultFormatterConfig()
+        assert cfg.enable_image_asset_export is False
+        assert cfg.markdown_image_preference == "embedded"
+        assert cfg.image_match_iou_threshold == 0.5
+        assert cfg.image_match_containment_threshold == 0.8
+        assert cfg.rendered_image_dpi == 300
+
 
 class TestLayoutDeviceUnit:
     """Unit tests for layout device selection and config plumbing (mocked)."""
@@ -1260,6 +1271,26 @@ class TestBaseParserResultSerialization:
 
         assert isinstance(saved, list)
 
+    def test_save_supports_nested_image_asset_paths_and_bytes(self):
+        from io import BytesIO
+
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (4, 4), color=(255, 0, 0)).save(buf, format="PNG")
+        payload = buf.getvalue()
+
+        r = self._make_result(
+            original_images=["paper.pdf"],
+            image_files={"imgs_embedded/test.png": payload},
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            r.save(output_dir=tmp_dir, save_layout_visualization=False)
+            saved_path = Path(tmp_dir, "paper", "imgs_embedded", "test.png")
+            assert saved_path.exists()
+            assert saved_path.read_bytes() == payload
+
     def test_repr(self):
         r = self._make_result()
         assert "PipelineResult" in repr(r)
@@ -1692,6 +1723,639 @@ class TestGlmOcrConstructor:
                 is True
             )
             parser.close()
+
+
+class TestImageAssetExport:
+    """Tests for SDK-owned image asset export."""
+
+    def test_export_image_assets_prefers_embedded_pdf_image(self):
+        from io import BytesIO
+
+        import fitz
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pdf_path = Path(tmp_dir, "sample.pdf")
+
+            img_buf = BytesIO()
+            Image.new("RGB", (80, 60), color=(0, 128, 255)).save(img_buf, format="PNG")
+            img_bytes = img_buf.getvalue()
+
+            doc = fitz.open()
+            page = doc.new_page(width=300, height=300)
+            rect = fitz.Rect(60, 70, 180, 170)
+            page.insert_image(rect, stream=img_bytes)
+            doc.save(pdf_path)
+            doc.close()
+
+            bbox = [200, 233, 600, 567]
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": bbox,
+                        "content": None,
+                    }
+                ]
+            ]
+            markdown = f"![](page=0,bbox={bbox})"
+
+            updated_json, updated_md, image_files = export_image_assets(
+                json_result,
+                markdown,
+                str(pdf_path),
+                enable_image_asset_export=True,
+                markdown_image_preference="embedded",
+                image_match_iou_threshold=0.3,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+            )
+
+            block = updated_json[0][0]
+            assert block["image_asset_source"] == "embedded"
+            assert block["image_path"].startswith("imgs_embedded/")
+            assert block["embedded_image_path"].startswith("imgs_embedded/")
+            assert block["rendered_image_path"].startswith("imgs_rendered/")
+            assert any(path.startswith("imgs_embedded/") for path in image_files)
+            assert any(path.startswith("imgs_rendered/") for path in image_files)
+            assert "imgs_embedded/" in updated_md
+
+    def test_export_image_assets_falls_back_to_rendered_when_no_embedded_match(self):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            bbox = [100, 100, 500, 500]
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": bbox,
+                        "content": None,
+                    }
+                ]
+            ]
+            markdown = f"![](page=0,bbox={bbox})"
+
+            updated_json, updated_md, image_files = export_image_assets(
+                json_result,
+                markdown,
+                str(img_path),
+                enable_image_asset_export=True,
+                markdown_image_preference="embedded",
+                image_match_iou_threshold=0.5,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+            )
+
+            block = updated_json[0][0]
+            assert block["image_asset_source"] == "rendered"
+            assert block["image_path"].startswith("imgs_rendered/")
+            assert block["rendered_image_path"].startswith("imgs_rendered/")
+            assert block["embedded_image_path"] is None
+            assert all(path.startswith("imgs_rendered/") for path in image_files)
+            assert "imgs_rendered/" in updated_md
+
+    def test_export_image_assets_rendered_only_mode_uses_imgs_rendered(self):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            bbox = [100, 100, 500, 500]
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": bbox,
+                        "content": None,
+                    }
+                ]
+            ]
+            markdown = f"![](page=0,bbox={bbox})"
+
+            updated_json, updated_md, image_files = export_image_assets(
+                json_result,
+                markdown,
+                str(img_path),
+                enable_image_asset_export=False,
+                markdown_image_preference="embedded",
+                image_match_iou_threshold=0.5,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+            )
+
+            block = updated_json[0][0]
+            assert block["image_asset_source"] == "rendered"
+            assert block["image_path"].startswith("imgs_rendered/")
+            assert block["rendered_image_path"] == block["image_path"]
+            assert block["embedded_image_path"] is None
+            assert all(path.startswith("imgs_rendered/") for path in image_files)
+            assert "imgs_rendered/" in updated_md
+
+    def test_export_image_assets_prefers_rendered_when_configured(self):
+        from io import BytesIO
+
+        import fitz
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pdf_path = Path(tmp_dir, "sample.pdf")
+
+            img_buf = BytesIO()
+            Image.new("RGB", (80, 60), color=(0, 128, 255)).save(img_buf, format="PNG")
+            img_bytes = img_buf.getvalue()
+
+            doc = fitz.open()
+            page = doc.new_page(width=300, height=300)
+            rect = fitz.Rect(60, 70, 180, 170)
+            page.insert_image(rect, stream=img_bytes)
+            doc.save(pdf_path)
+            doc.close()
+
+            bbox = [200, 233, 600, 567]
+            json_result = [
+                [{"index": 0, "label": "image", "bbox_2d": bbox, "content": None}]
+            ]
+            markdown = f"![](page=0,bbox={bbox})"
+
+            updated_json, updated_md, image_files = export_image_assets(
+                json_result,
+                markdown,
+                str(pdf_path),
+                enable_image_asset_export=True,
+                markdown_image_preference="rendered",
+                image_match_iou_threshold=0.3,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+            )
+
+            block = updated_json[0][0]
+            assert block["image_asset_source"] == "rendered"
+            assert block["image_path"].startswith("imgs_rendered/")
+            assert block["rendered_image_path"].startswith("imgs_rendered/")
+            assert block["embedded_image_path"].startswith("imgs_embedded/")
+            assert "imgs_rendered/" in updated_md
+
+    def test_preserve_rendered_assets_uses_rendered_path_over_image_path(self):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            rendered = Image.new("RGB", (32, 24), color=(10, 20, 30))
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": [100, 100, 500, 500],
+                        "content": None,
+                        "image_path": "imgs_embedded/existing.png",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": "imgs_embedded/existing.png",
+                        "image_asset_source": "embedded",
+                    }
+                ]
+            ]
+            markdown = "![Image](imgs_embedded/existing.png)"
+
+            updated_json, updated_md, image_files = export_image_assets(
+                json_result,
+                markdown,
+                str(img_path),
+                enable_image_asset_export=False,
+                markdown_image_preference="embedded",
+                image_match_iou_threshold=0.5,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+                rendered_images={"rendered_page0_idx0.jpg": rendered},
+            )
+
+            block = updated_json[0][0]
+            assert block["image_path"] == "imgs_rendered/rendered_page0_idx0.jpg"
+            assert (
+                block["rendered_image_path"] == "imgs_rendered/rendered_page0_idx0.jpg"
+            )
+            assert block["embedded_image_path"] is None
+            assert "imgs_rendered/rendered_page0_idx0.jpg" in image_files
+            assert updated_md == "![Image](imgs_rendered/rendered_page0_idx0.jpg)"
+
+    def test_preserve_rendered_assets_missing_key_keeps_block_coherent(self):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": [100, 100, 500, 500],
+                        "content": None,
+                        "image_path": "imgs_embedded/existing.png",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": "imgs_embedded/existing.png",
+                        "image_asset_source": "embedded",
+                    }
+                ]
+            ]
+            markdown = "![Image](imgs_embedded/existing.png)"
+
+            updated_json, updated_md, image_files = export_image_assets(
+                json_result,
+                markdown,
+                str(img_path),
+                enable_image_asset_export=False,
+                markdown_image_preference="embedded",
+                image_match_iou_threshold=0.5,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+                rendered_images={
+                    "other.jpg": Image.new("RGB", (4, 4), color=(1, 2, 3))
+                },
+            )
+
+            block = updated_json[0][0]
+            assert block["image_path"].startswith("imgs_rendered/")
+            assert (
+                block["rendered_image_path"] == "imgs_rendered/rendered_page0_idx0.jpg"
+            )
+            assert block["embedded_image_path"] is None
+            assert block["image_asset_source"] == "rendered"
+            assert "imgs_rendered/rendered_page0_idx0.jpg" in image_files
+            assert "imgs_rendered/rendered_page0_idx0.jpg" in updated_md
+
+    def test_preferred_mode_missing_rendered_key_does_not_leak_helper_fields(self):
+        from io import BytesIO
+
+        import fitz
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pdf_path = Path(tmp_dir, "sample.pdf")
+
+            img_buf = BytesIO()
+            Image.new("RGB", (80, 60), color=(0, 128, 255)).save(img_buf, format="PNG")
+            img_bytes = img_buf.getvalue()
+
+            doc = fitz.open()
+            page = doc.new_page(width=300, height=300)
+            rect = fitz.Rect(60, 70, 180, 170)
+            page.insert_image(rect, stream=img_bytes)
+            doc.save(pdf_path)
+            doc.close()
+
+            bbox = [200, 233, 600, 567]
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": bbox,
+                        "content": None,
+                        "image_path": "imgs_embedded/stale.png",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": "imgs_embedded/stale.png",
+                        "image_asset_source": "embedded",
+                    }
+                ]
+            ]
+            markdown = "![Image](imgs_embedded/stale.png)"
+
+            updated_json, _, _ = export_image_assets(
+                json_result,
+                markdown,
+                str(pdf_path),
+                enable_image_asset_export=True,
+                markdown_image_preference="embedded",
+                image_match_iou_threshold=0.3,
+                image_match_containment_threshold=0.8,
+                rendered_image_dpi=300,
+                rendered_images={
+                    "other.jpg": Image.new("RGB", (4, 4), color=(1, 2, 3))
+                },
+            )
+
+            block = updated_json[0][0]
+            assert "_needs_rendered_export" not in block
+            assert "_previous_image_path" not in block
+
+    def test_preferred_mode_render_recovery_failure_keeps_existing_asset_state(self):
+        from io import BytesIO
+
+        import fitz
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pdf_path = Path(tmp_dir, "sample.pdf")
+
+            img_buf = BytesIO()
+            Image.new("RGB", (80, 60), color=(0, 128, 255)).save(img_buf, format="PNG")
+            img_bytes = img_buf.getvalue()
+
+            doc = fitz.open()
+            page = doc.new_page(width=300, height=300)
+            rect = fitz.Rect(60, 70, 180, 170)
+            page.insert_image(rect, stream=img_bytes)
+            doc.save(pdf_path)
+            doc.close()
+
+            bbox = [200, 233, 600, 567]
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": bbox,
+                        "content": None,
+                        "image_path": "imgs_embedded/stale.png",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": "imgs_embedded/stale.png",
+                        "image_asset_source": "embedded",
+                    }
+                ]
+            ]
+            markdown = "![Image](imgs_embedded/stale.png)"
+
+            with patch(
+                "glmocr.utils.image_asset_utils.crop_image_region",
+                side_effect=RuntimeError("crop failed"),
+            ):
+                updated_json, updated_md, image_files = export_image_assets(
+                    json_result,
+                    markdown,
+                    str(pdf_path),
+                    enable_image_asset_export=True,
+                    markdown_image_preference="embedded",
+                    image_match_iou_threshold=0.3,
+                    image_match_containment_threshold=0.8,
+                    rendered_image_dpi=300,
+                    rendered_images={
+                        "other.jpg": Image.new("RGB", (4, 4), color=(1, 2, 3))
+                    },
+                )
+
+            block = updated_json[0][0]
+            assert block["image_path"].startswith("imgs_embedded/")
+            assert block["rendered_image_path"] is None
+            assert block["embedded_image_path"].startswith("imgs_embedded/")
+            assert block["image_asset_source"] == "embedded"
+            assert "imgs_embedded/" in updated_md
+            assert all(
+                not path.startswith("imgs_rendered/rendered_page0_idx0.jpg")
+                for path in image_files
+            )
+
+    def test_preferred_mode_render_failure_without_embedded_match_does_not_advertise_stale_rendered_asset(
+        self,
+    ):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": [100, 100, 500, 500],
+                        "content": None,
+                        "image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": None,
+                        "image_asset_source": "rendered",
+                        "_needs_rendered_export": True,
+                    }
+                ]
+            ]
+            markdown = "![Image 0-0](imgs_rendered/rendered_page0_idx0.jpg)"
+
+            with (
+                patch(
+                    "glmocr.utils.image_asset_utils._load_render_pages",
+                    return_value=[Image.new("RGB", (200, 200), color=(255, 255, 255))],
+                ),
+                patch(
+                    "glmocr.utils.image_asset_utils.crop_image_region",
+                    side_effect=RuntimeError("crop failed"),
+                ),
+            ):
+                updated_json, updated_md, image_files = export_image_assets(
+                    json_result,
+                    markdown,
+                    str(img_path),
+                    enable_image_asset_export=True,
+                    markdown_image_preference="embedded",
+                    image_match_iou_threshold=0.3,
+                    image_match_containment_threshold=0.8,
+                    rendered_image_dpi=300,
+                )
+
+            block = updated_json[0][0]
+            assert block["image_path"] is None
+            assert block["rendered_image_path"] is None
+            assert block["embedded_image_path"] is None
+            assert block["image_asset_source"] == "rendered"
+            assert "imgs_rendered/rendered_page0_idx0.jpg" not in updated_md
+            assert image_files == {}
+
+    def test_preferred_mode_no_render_pages_does_not_advertise_rendered_asset(self):
+        from io import BytesIO
+
+        import fitz
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pdf_path = Path(tmp_dir, "sample.pdf")
+
+            img_buf = BytesIO()
+            Image.new("RGB", (80, 60), color=(0, 128, 255)).save(img_buf, format="PNG")
+            img_bytes = img_buf.getvalue()
+
+            doc = fitz.open()
+            page = doc.new_page(width=300, height=300)
+            rect = fitz.Rect(60, 70, 180, 170)
+            page.insert_image(rect, stream=img_bytes)
+            doc.save(pdf_path)
+            doc.close()
+
+            bbox = [200, 233, 600, 567]
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": bbox,
+                        "content": None,
+                        "image_path": "imgs_embedded/stale.png",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": "imgs_embedded/stale.png",
+                        "image_asset_source": "embedded",
+                    }
+                ]
+            ]
+            markdown = "![Image](imgs_embedded/stale.png)"
+
+            with patch(
+                "glmocr.utils.image_asset_utils._load_render_pages", return_value=[]
+            ):
+                updated_json, updated_md, image_files = export_image_assets(
+                    json_result,
+                    markdown,
+                    str(pdf_path),
+                    enable_image_asset_export=True,
+                    markdown_image_preference="embedded",
+                    image_match_iou_threshold=0.3,
+                    image_match_containment_threshold=0.8,
+                    rendered_image_dpi=300,
+                    rendered_images={
+                        "other.jpg": Image.new("RGB", (4, 4), color=(1, 2, 3))
+                    },
+                )
+
+            block = updated_json[0][0]
+            assert block["image_path"].startswith("imgs_embedded/")
+            assert block["rendered_image_path"] is None
+            assert block["embedded_image_path"].startswith("imgs_embedded/")
+            assert block["image_asset_source"] == "embedded"
+            assert "imgs_embedded/embedded_page0_idx0_xref" in updated_md
+            assert all(
+                not path.startswith("imgs_rendered/rendered_page0_idx0.jpg")
+                for path in image_files
+            )
+
+    def test_preferred_mode_no_render_pages_and_no_embedded_match_does_not_point_to_stale_rendered_path(
+        self,
+    ):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": [100, 100, 500, 500],
+                        "content": None,
+                        "image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": None,
+                        "image_asset_source": "rendered",
+                        "_needs_rendered_export": True,
+                    }
+                ]
+            ]
+            markdown = "![Image](imgs_rendered/rendered_page0_idx0.jpg)"
+
+            with patch(
+                "glmocr.utils.image_asset_utils._load_render_pages", return_value=[]
+            ):
+                updated_json, updated_md, image_files = export_image_assets(
+                    json_result,
+                    markdown,
+                    str(img_path),
+                    enable_image_asset_export=True,
+                    markdown_image_preference="embedded",
+                    image_match_iou_threshold=0.3,
+                    image_match_containment_threshold=0.8,
+                    rendered_image_dpi=300,
+                )
+
+            block = updated_json[0][0]
+            assert block["image_path"] is None
+            assert block["rendered_image_path"] is None
+            assert block["embedded_image_path"] is None
+            assert block["image_asset_source"] == "rendered"
+            assert "imgs_rendered/rendered_page0_idx0.jpg" not in updated_md
+            assert image_files == {}
+
+    def test_preferred_mode_embedded_markdown_origin_is_removed_when_no_asset_survives(
+        self,
+    ):
+        from PIL import Image
+
+        from glmocr.utils.image_asset_utils import export_image_assets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            img_path = Path(tmp_dir, "sample.png")
+            Image.new("RGB", (200, 200), color=(255, 255, 255)).save(img_path)
+
+            json_result = [
+                [
+                    {
+                        "index": 0,
+                        "label": "image",
+                        "bbox_2d": [100, 100, 500, 500],
+                        "content": None,
+                        "image_path": "imgs_embedded/original.png",
+                        "rendered_image_path": "imgs_rendered/rendered_page0_idx0.jpg",
+                        "embedded_image_path": None,
+                        "image_asset_source": "embedded",
+                        "_needs_rendered_export": True,
+                        "_previous_image_path": "imgs_embedded/original.png",
+                    }
+                ]
+            ]
+            markdown = "![Image 0-0](imgs_embedded/original.png)"
+
+            with patch(
+                "glmocr.utils.image_asset_utils._load_render_pages", return_value=[]
+            ):
+                updated_json, updated_md, image_files = export_image_assets(
+                    json_result,
+                    markdown,
+                    str(img_path),
+                    enable_image_asset_export=True,
+                    markdown_image_preference="embedded",
+                    image_match_iou_threshold=0.3,
+                    image_match_containment_threshold=0.8,
+                    rendered_image_dpi=300,
+                )
+
+            block = updated_json[0][0]
+            assert block["image_path"] is None
+            assert block["rendered_image_path"] is None
+            assert block["embedded_image_path"] is None
+            assert "imgs_embedded/original.png" not in updated_md
+            assert "imgs_rendered/rendered_page0_idx0.jpg" not in updated_md
+            assert image_files == {}
 
 
 class TestOCRClientOllamaConfig:

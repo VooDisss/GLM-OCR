@@ -29,8 +29,8 @@ from pathlib import Path
 
 from glmocr.config import load_config
 from glmocr.parser_result import PipelineResult
+from glmocr.utils.image_asset_utils import export_image_assets
 from glmocr.utils.logging import get_logger, ensure_logging_configured
-from glmocr.utils.markdown_utils import resolve_image_regions
 
 logger = get_logger(__name__)
 
@@ -459,10 +459,15 @@ class GlmOcr:
             pages_info,
         )
 
-        json_result, markdown_result, image_files = resolve_image_regions(
+        json_result, markdown_result, image_files = export_image_assets(
             json_result,
             markdown_result,
             source,
+            enable_image_asset_export=self.config_model.pipeline.result_formatter.enable_image_asset_export,
+            markdown_image_preference=self.config_model.pipeline.result_formatter.markdown_image_preference,
+            image_match_iou_threshold=self.config_model.pipeline.result_formatter.image_match_iou_threshold,
+            image_match_containment_threshold=self.config_model.pipeline.result_formatter.image_match_containment_threshold,
+            rendered_image_dpi=self.config_model.pipeline.result_formatter.rendered_image_dpi,
         )
 
         page_metadata = None

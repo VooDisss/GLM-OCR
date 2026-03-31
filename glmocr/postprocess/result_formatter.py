@@ -163,7 +163,7 @@ class ResultFormatter(BasePostProcessor):
 
         Returns:
             (json_str, markdown_str, image_files) where *image_files* maps
-            ``filename`` → PIL Image for the caller to persist.
+            relative output path → PIL Image for the caller to persist.
         """
         self.page_metadata = None
         self.page_number_candidates = None
@@ -258,9 +258,12 @@ class ResultFormatter(BasePostProcessor):
                             filename = (
                                 f"{image_prefix}_page{page_idx}_idx{image_counter}.jpg"
                             )
-                            rel_path = f"imgs/{filename}"
-                            image_files[filename] = img
+                            rel_path = f"imgs_rendered/{filename}"
+                            image_files[rel_path] = img
                             result["image_path"] = rel_path
+                            result["rendered_image_path"] = rel_path
+                            result["embedded_image_path"] = None
+                            result["image_asset_source"] = "rendered"
                             markdown_page_results.append(
                                 f"![Image {page_idx}-{image_counter}]({rel_path})"
                             )

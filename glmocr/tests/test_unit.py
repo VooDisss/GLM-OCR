@@ -264,13 +264,16 @@ class TestLayoutDeviceUnit:
             "model.enc_bbox_head.layers.2.bias": torch.full((4,), 13.0),
         }
 
-        with patch.object(
-            det,
-            "_resolve_model_weights_path",
-            return_value=Path("dummy-model.safetensors"),
-        ), patch(
-            "glmocr.layout.layout_detector.load_file",
-            return_value=state_dict.copy(),
+        with (
+            patch.object(
+                det,
+                "_resolve_model_weights_path",
+                return_value=Path("dummy-model.safetensors"),
+            ),
+            patch(
+                "glmocr.layout.layout_detector.load_file",
+                return_value=state_dict.copy(),
+            ),
         ):
             prepared = det._prepare_pp_doclayout_state_dict()
 
